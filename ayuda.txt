@@ -1,0 +1,57 @@
+'============================================================
+' VER CODIGOS LADO A LADO: 15 del FMS (col D, fondo 0) y
+' 15 del vector (col A), crudos y normalizados
+'============================================================
+Public Sub VerCodigos()
+    Dim dF As Object, dV As Object, arrF() As Long, o As Variant
+    Dim fV As Long, fFMS As Long
+    Dim wb As Workbook, wsX As Worksheet, ws As Worksheet
+    Dim uf As Long, i As Long, fila As Long
+    Dim codFondo As String, colCruce As Long
+
+    o = Observaciones()
+    fV = o(UBound(o))
+    Set dF = MapaFMS(): Set dV = MapaVector()
+    arrF = ClavesOrdenadas(dF)
+    fFMS = FMSParaVector(fV, arrF, CLng(CfgNum("B9", 1)))
+    colCruce = CLng(CfgNum("B8", 4))
+    codFondo = Cfg("B7"): If Len(codFondo) = 0 Then codFondo = "9"
+
+    Set ws = Hoja("VerCodigos")
+    ws.Cells.Clear
+    ws.Range("A1:E1").Value = Array("FMS COL " & colCruce & " CRUDO", "FMS NORM", "", "VECTOR A CRUDO", "VECTOR NORM")
+
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    Set wb = Workbooks.Open(dF(fFMS), ReadOnly:=True, UpdateLinks:=0)
+    Set wsX = wb.Worksheets("Cartera")
+    uf = UltFila(wsX)
+    fila = 2
+    For i = 2 To uf
+        If NormFond(wsX.Cells(i, 1).Value) = codFondo And fila <= 16 Then
+            ws.Cells(fila, 1).Value = "'" & CStr(wsX.Cells(i, colCruce).Value)
+            ws.Cells(fila, 2).Value = "'" & NormCod(wsX.Cells(i, colCruce).Value)
+            fila = fila + 1
+        End If
+    Next i
+    wb.Close SaveChanges:=False
+
+    Set wb = Workbooks.Open(dV(fV), ReadOnly:=True, UpdateLinks:=0)
+    Set wsX = wb.Worksheets(1)
+    uf = UltFila(wsX)
+    fila = 2
+    For i = 2 To uf
+        If Len(Trim$(CStr(wsX.Cells(i, 1).Value))) > 0 And fila <= 16 Then
+            ws.Cells(fila, 4).Value = "'" & CStr(wsX.Cells(i, 1).Value)
+            ws.Cells(fila, 5).Value = "'" & NormCod(wsX.Cells(i, 1).Value)
+            fila = fila + 1
+        End If
+    Next i
+    wb.Close SaveChanges:=False
+
+    ws.Columns("A:E").AutoFit
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    ws.Activate
+End Sub
