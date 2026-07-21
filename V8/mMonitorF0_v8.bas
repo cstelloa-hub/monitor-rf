@@ -2,7 +2,7 @@ Attribute VB_Name = "mMonitorF0"
 Option Explicit
 
 '============================================================
-' MONITOR FONDO 0 - Modulo unico (v8)  [v8: rating CP/LP escalas separadas + DTS + backfill con guardado cada 25]
+' MONITOR FONDO 0 - Modulo unico (v8)  [v8.2: CPL + busqueda en subcarpetas por anio]
 ' Fuentes + motor + metricas + historico + diario/backfill
 '
 ' MACROS PARA EL USUARIO (asignar a botones):
@@ -195,11 +195,37 @@ End Function
 
 Private Function MapaArchivos(ByVal carpeta As String, ByVal patron As String, _
                               ByVal extOK As String) As Object
-    Dim d As Object, f As String, fch As Date, ext As String
+    Dim d As Object, f As String
     Set d = CreateObject("Scripting.Dictionary")
     carpeta = ConBarra(carpeta)
     If Len(carpeta) = 0 Then Set MapaArchivos = d: Exit Function
     If Len(Dir(carpeta, vbDirectory)) = 0 Then Set MapaArchivos = d: Exit Function
+
+    ' 1) raiz (los archivos corrientes; tienen prioridad ante duplicados)
+    EscanearCarpeta d, carpeta, patron, extOK
+
+    ' 2) un nivel de subcarpetas (p.ej. 2024, 2023, 2022)
+    '    Nota: no se pueden anidar Dir(), asi que primero se listan las subcarpetas
+    Dim subs As Collection, s As Variant
+    Set subs = New Collection
+    f = Dir(carpeta, vbDirectory)
+    Do While Len(f) > 0
+        If f <> "." And f <> ".." Then
+            On Error Resume Next
+            If (GetAttr(carpeta & f) And vbDirectory) = vbDirectory Then subs.Add carpeta & f & "\"
+            On Error GoTo 0
+        End If
+        f = Dir
+    Loop
+    For Each s In subs
+        EscanearCarpeta d, CStr(s), patron, extOK
+    Next s
+    Set MapaArchivos = d
+End Function
+
+Private Sub EscanearCarpeta(d As Object, ByVal carpeta As String, _
+                            ByVal patron As String, ByVal extOK As String)
+    Dim f As String, fch As Date, ext As String
     f = Dir(carpeta & patron)
     Do While Len(f) > 0
         ext = LCase$(Mid$(f, InStrRev(f, ".")))
@@ -211,8 +237,7 @@ Private Function MapaArchivos(ByVal carpeta As String, ByVal patron As String, _
         End If
         f = Dir
     Loop
-    Set MapaArchivos = d
-End Function
+End Sub
 
 Private Function MapaFMS() As Object
     Set MapaFMS = MapaArchivos(Cfg("B1"), "FMS_*.xls*", ".xlsx")
@@ -405,10 +430,12 @@ End Function
 
 Public Function PuntajeRating(ByVal r As String) As Double
     Select Case NormRating(r)
-        ' --- corto plazo ---
-        Case "CLP1+": PuntajeRating = 10
-        Case "CLP1":  PuntajeRating = 7
-        Case "CLP1-": PuntajeRating = 4
+        ' --- corto plazo (variantes CPL y CLP, con y sin espacio) ---
+        Case "CPL1+", "CLP1+": PuntajeRating = 10
+        Case "CPL1", "CLP1":   PuntajeRating = 7
+        Case "CPL1-", "CLP1-": PuntajeRating = 4
+        Case "CPL2+", "CLP2+": PuntajeRating = 3
+        Case "CPL2", "CLP2":   PuntajeRating = 2
         ' --- largo plazo: soberano ---
         Case "GOBIERNOCENTRAL", "GOB.CENTRAL", "SOBERANO": PuntajeRating = 10
         ' --- largo plazo: internacional (LPI) -> equivalencia local ---
